@@ -1,0 +1,16 @@
+services:
+  soundsense:
+    build:
+      context: .
+      dockerfile: deployment/Dockerfile
+    ports: ["3001:3001"]
+    environment:
+      HOST: 0.0.0.0
+      PORT: 3001
+      RELOAD: "false"
+      SOUNDSENSE_ESC50_DIR: /app/data/raw/ESC-50
+    volumes:
+      - ./var:/app/var
+      - ./artifacts:/app/artifacts
+      - ./data:/app/data:ro
+    restart: unless-stopped

@@ -1,0 +1,1 @@
+"""SoundSense application package."""

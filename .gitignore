@@ -1,0 +1,43 @@
+# Local configuration, credentials, accounts, and runtime data
+.env
+.env.*
+!.env.example
+.jwt_secret
+*.db
+*.db-*
+*.sqlite*
+var/**
+!var/.gitkeep
+# Datasets, generated features, models, reports, and caches
+artifacts/**
+!artifacts/.gitkeep
+data/**
+!data/.gitkeep
+*.pt
+*.pth
+*.bin
+*.safetensors
+*.onnx
+*.npy
+*.npz
+.hf_cache/
+.cache/
+# Tools and environments
+.venv/
+venv/
+node_modules/
+__pycache__/
+*.py[cod]
+*.egg-info/
+build/
+dist/
+.pytest_cache/
+.coverage
+htmlcov/
+*.log
+*.tmp
+.backups/
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
