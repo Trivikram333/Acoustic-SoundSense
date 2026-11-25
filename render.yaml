@@ -3,6 +3,11 @@ services:
     name: soundsense
     env: docker
     dockerfilePath: ./deployment/Dockerfile
+    healthCheckPath: /api/health
+    disk:
+      name: soundsense-data
+      mountPath: /app/persist
+      sizeGB: 1
     envVars:
       - key: HOST
         value: 0.0.0.0
@@ -10,3 +15,11 @@ services:
         value: 10000
       - key: RELOAD
         value: "false"
+      - key: SOUNDSENSE_RUNTIME_DIR
+        value: /app/persist/var
+      - key: SOUNDSENSE_ARTIFACTS_DIR
+        value: /app/persist/artifacts
+      - key: SOUNDSENSE_DATA_DIR
+        value: /app/persist/data
+      - key: SOUNDSENSE_SECRET
+        generateValue: true
