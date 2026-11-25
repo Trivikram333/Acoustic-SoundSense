@@ -7,7 +7,7 @@
   <title>SoundSense — Environmental Sound Classification Studio</title>
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=Space+Grotesk:wght@500;600;700;800&display=swap" rel="stylesheet" />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=Space+Grotesk:wght@500;600;700;800&family=Press+Start+2P&family=Silkscreen:wght@400;700&family=VT323&display=swap" rel="stylesheet" />
   <link rel="stylesheet" href="css/styles.css" />
   <script>
     (function () {
@@ -19,12 +19,14 @@
           var mql = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)');
           effective = (mql && mql.matches) ? 'dark' : 'light';
         }
+        if (pref === 'rustic') effective = 'rustic';
+        if (pref === 'neon') effective = 'neon';
         document.documentElement.setAttribute('data-theme', effective);
       } catch (_) {}
     })();
   </script>
 </head>
-<body>
+<body class="retro-app">
   <a href="#app-main" class="skip-link">Skip to main content</a>
   <!-- Ambient Studio Atmospheric Soundscape (Moving Background & Harmonic Wave Parallax) -->
   <div class="ambient-layer" id="ambient-layer" aria-hidden="true">
@@ -136,6 +138,12 @@
               <line x1="8" y1="21" x2="16" y2="21"></line>
               <line x1="12" y1="17" x2="12" y2="21"></line>
             </svg>
+          </button>
+          <button type="button" class="theme-btn" id="theme-btn-rustic" data-theme-val="rustic" role="radio" aria-checked="false" title="Rustic Canopy palette" aria-label="Rustic Canopy palette">
+            <span class="rustic-theme-swatch" aria-hidden="true"></span>
+          </button>
+          <button type="button" class="theme-btn" id="theme-btn-neon" data-theme-val="neon" role="radio" aria-checked="false" title="Neon Arcade palette" aria-label="Neon Arcade palette">
+            <span class="neon-theme-swatch" aria-hidden="true"></span>
           </button>
         </div>
 
@@ -1244,6 +1252,17 @@
             <p class="panel-subtext">Fine-tune AST (Audio Spectrogram Transformer) on ESC-50, inspect measured metrics, and manage checkpoints. AST requires the FastAPI backend, the ESC-50 WAV dataset, and one fold per run; other model training options remain demo simulations.</p>
         </div>
 
+        <div class="card-box card-module" style="margin:0 0 24px;padding:22px;">
+          <div style="display:flex;align-items:center;justify-content:space-between;gap:16px;flex-wrap:wrap;">
+            <div><h3 class="card-tag">Developer access</h3><p class="card-desc-compact">Grant developer tools to an existing account.</p></div>
+            <button type="button" class="btn btn-primary" id="manage-developers-toggle">Allow a user to become developer</button>
+          </div>
+          <form id="manage-developers-form" hidden style="margin-top:18px;max-width:560px;">
+            <label class="control-label" for="developer-user-email">User account email</label>
+            <div style="display:flex;gap:10px;flex-wrap:wrap;"><input type="email" id="developer-user-email" class="custom-input" placeholder="user@example.com" required style="flex:1;min-width:220px;" /><button type="submit" class="btn btn-primary" id="developer-user-submit">Grant developer access</button></div>
+            <p id="developer-user-feedback" class="card-desc-compact" role="status" aria-live="polite" style="margin-top:10px;"></p>
+          </form>
+        </div>
         <div class="training-layout">
           <!-- Training Configuration Card -->
           <div class="card-box card-module training-config-card">
@@ -1446,7 +1465,7 @@
                   <span class="card-tag">Class Distribution</span>
                   <span class="card-sub-info">ESC-50 Dataset</span>
                 </div>
-                <div class="analytics-chart-area">
+                <div class="analytics-chart-area analytics-class-chart-area" tabindex="0" aria-label="Scrollable chart showing all 50 ESC-50 class counts">
                   <canvas id="class-dist-chart" class="analytics-canvas" width="560" height="220" aria-label="Class distribution bar chart"></canvas>
                 </div>
               </div>

@@ -344,6 +344,20 @@
 
   document.addEventListener('keydown', function (e) { if (e.key === 'Escape') closeHistory(); });
 
+  var devToggle = $("manage-developers-toggle"), devForm = $("manage-developers-form");
+  if (devToggle && devForm) {
+    devToggle.addEventListener("click", function () { devForm.hidden = !devForm.hidden; });
+    devForm.addEventListener("submit", function (event) {
+      event.preventDefault();
+      var email = $("developer-user-email"), feedback = $("developer-user-feedback"), submit = $("developer-user-submit");
+      submit.disabled = true; feedback.textContent = "Updating account access…";
+      api("/api/admin/developers", { method: "POST", body: { email: email.value.trim() } }).then(function (result) {
+        feedback.textContent = result.user.email + " can now use developer features."; email.value = "";
+      }).catch(function (err) { feedback.textContent = err.message || "Could not update this account."; })
+        .finally(function () { submit.disabled = false; });
+    });
+  }
+
   // ───────── boot: confirm any saved token with the server ─────────
   setMode('login');
   if (getToken()) {

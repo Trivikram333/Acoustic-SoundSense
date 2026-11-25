@@ -176,6 +176,22 @@ class LoginIn(BaseModel):
 # ───────────────────────── routes ─────────────────────────
 router = APIRouter()
 
+class PromoteDeveloperIn(BaseModel):
+    email: str
+
+@router.post("/api/admin/developers", dependencies=[Depends(require_developer)])
+def promote_existing_user(body: PromoteDeveloperIn):
+    email = body.email.strip().lower()
+    if not EMAIL_RE.match(email):
+        raise HTTPException(400, "Enter a valid email address.")
+    with db() as con:
+        row = con.execute("SELECT id, name, email FROM users WHERE email = ?", (email,)).fetchone()
+        if not row:
+            raise HTTPException(404, "No account exists for that email. Ask the user to sign up first.")
+        con.execute("UPDATE users SET role = 'developer' WHERE id = ?", (row["id"],))
+    return {"ok": True, "user": {"id": row["id"], "name": row["name"], "email": row["email"], "role": "developer"}}
+
+
 
 @router.post("/api/auth/signup", status_code=201)
 def signup(body: SignupIn):

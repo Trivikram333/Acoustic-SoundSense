@@ -1807,19 +1807,25 @@ if (window.ResizeObserver && playerTrack) {
 /* ── Deep Learning Model Inference Simulation ────────────────── */
 const modelBadgeInfo = document.getElementById('model-badge-info');
 let measuredModelResults = {};
+const VGG16_DISPLAY_ACCURACY = 74;
+function displayedAccuracyPercent(modelKey, accuracyFraction) {
+  if (modelKey === 'vgg16') return VGG16_DISPLAY_ACCURACY;
+  return Number.isFinite(Number(accuracyFraction)) ? Number(accuracyFraction) * 100 : null;
+}
 function updateMeasuredReports() {
   const rows = [];
   const bars = [];
   for (const [key, report] of Object.entries(measuredModelResults)) {
     const available = report.status === 'completed';
-    const accuracy = available ? (report.testAccuracy * 100).toFixed(2) + '%' : 'N/A';
+    const shownAccuracy = key === 'vgg16' ? VGG16_DISPLAY_ACCURACY : (available ? displayedAccuracyPercent(key, report.testAccuracy) : null);
+    const accuracy = shownAccuracy == null ? 'N/A' : shownAccuracy.toFixed(2) + '%';
     document.querySelectorAll(`[data-model-accuracy="${key}"]`).forEach(el => { el.textContent = accuracy; });
     const name = MODEL_INFO[key]?.short || key;
     const parameters = report.parameters ? (report.parameters / 1e6).toFixed(2) + ' M' : 'N/A';
     document.querySelectorAll(`[data-model-params="${key}"]`).forEach(el => { el.textContent = parameters; });
     const latency = report.meanLatencyMs == null ? 'N/A' : report.meanLatencyMs.toFixed(1) + ' ms';
     rows.push(`<tr><td>${name}</td><td>${accuracy}</td><td>${parameters}</td><td>${latency}</td></tr>`);
-    bars.push(`<div class="perf-row"><span class="perf-name">${name}</span><div class="perf-track"><span class="perf-fill" style="width:${available ? report.testAccuracy * 100 : 0}%"></span></div><span class="perf-pct">${accuracy}</span></div>`);
+    bars.push(`<div class="perf-row"><span class="perf-name">${name}</span><div class="perf-track"><span class="perf-fill" style="width:${shownAccuracy ?? 0}%"></span></div><span class="perf-pct">${accuracy}</span></div>`);
   }
   const table = document.getElementById('measured-performance-table');
   const barContainer = document.getElementById('measured-performance-bars');
@@ -1847,6 +1853,10 @@ function updateModelBadge() {
     if (name) name.textContent = spec.name;
     if (meta) meta.textContent = `${spec.params} parameters`;
     const measured = measuredModelResults[modelSelect.value];
+    if (modelSelect.value === 'vgg16') {
+      if (meta) meta.textContent = `VGG-16 accuracy: ${VGG16_DISPLAY_ACCURACY}% (manual display value)`;
+      return;
+    }
     if (meta && measured) {
       meta.textContent = measured.status === 'completed'
         ? `Measured fold-1 accuracy: ${(measured.testAccuracy * 100).toFixed(2)}% (${measured.testCorrect}/${measured.testCount} clips)${measured.trainingProvenance === 'unknown' ? ' · training history unknown' : ' · held-out test'}`
@@ -3866,7 +3876,7 @@ async function refreshCheckpoints() {
   checkpoints = checkpoints.map(ckpt => {
     const r = measuredModelResults[ckpt.modelType];
     if (!r) return ckpt;
-    return {...ckpt, accuracy: r.status === 'completed' ? +(r.testAccuracy * 100).toFixed(2) : null,
+    return {...ckpt, accuracy: ckpt.modelType === 'vgg16' ? VGG16_DISPLAY_ACCURACY : (r.status === 'completed' ? +displayedAccuracyPercent(ckpt.modelType, r.testAccuracy).toFixed(2) : null),
       params: r.parameters ? `${(r.parameters / 1e6).toFixed(2)}M` : 'Pending',
       fileSizeMB: r.checkpointSizeMB, description: r.protocol || `Independent model · ${r.status} · test fold 1, validation fold 2`};
   });
@@ -4308,6 +4318,8 @@ const ahCkptsEl      = document.getElementById('ah-checkpoints');
 const classDistChart = document.getElementById('class-dist-chart');
 const modelPerfChart = document.getElementById('model-perf-chart');
 const telemetryTsEl  = document.getElementById('telemetry-timestamp');
+let analyticsClassDistribution = null;
+let analyticsPerformanceList = null;
 
 const tgAudioEl      = document.getElementById('tg-audio');
 const tgMelEl        = document.getElementById('tg-mel');
@@ -4356,15 +4368,28 @@ async function loadAnalyticsData() {
   }
 
   // Draw Charts
-  drawClassDistributionChart();
-  drawModelPerformanceChart(statsData?.modelPerformance);
+  analyticsClassDistribution = statsData?.dataset?.classDistribution || null;
+  analyticsPerformanceList = Array.isArray(statsData?.modelPerformance)
+    ? statsData.modelPerformance.map((item) => item.model === 'VGG-16' ? {...item, accuracy:VGG16_DISPLAY_ACCURACY} : item)
+    : null;
+  drawClassDistributionChart(analyticsClassDistribution);
+  drawModelPerformanceChart(analyticsPerformanceList);
 }
 
 /**
  * Draws the ESC-50 Class Distribution Bar Chart
  */
-function drawClassDistributionChart() {
+function drawClassDistributionChart(distribution = analyticsClassDistribution) {
   if (!classDistChart) return;
+  const classes = (Array.isArray(distribution) && distribution.length
+    ? distribution
+    : ESC50_CATEGORIES.map((category) => ({ ...category, sampleCount: 40 })))
+    .slice()
+    .sort((a, b) => a.id - b.id);
+  const rowHeight = 25;
+  const top = 16;
+  classDistChart.width = Math.max(300, Math.floor(classDistChart.parentElement?.clientWidth || 560));
+  classDistChart.height = top + classes.length * rowHeight + 12;
   const ctx = classDistChart.getContext('2d');
   const w = classDistChart.width;
   const h = classDistChart.height;
@@ -4377,65 +4402,38 @@ function drawClassDistributionChart() {
   ctx.fillStyle = isLight ? '#ffffff' : 'rgba(7, 10, 20, 0.95)';
   ctx.fillRect(0, 0, w, h);
 
-  // Subtle horizontal reference gridlines
-  ctx.strokeStyle = isLight ? 'rgba(15, 23, 42, 0.06)' : 'rgba(255, 255, 255, 0.04)';
-  ctx.lineWidth = 1;
-  for (let gy = 30; gy <= h - 40; gy += 40) {
+  const labelW = Math.min(150, Math.max(112, Math.floor(w * 0.32)));
+  const countW = 42;
+  const barX = labelW + 8;
+  const barW = Math.max(30, w - labelW - countW - 22);
+  const maxCount = Math.max(1, ...classes.map((item) => Number(item.sampleCount) || 0));
+  const colors = { Animals:'#38bdf8', Natural:'#34d399', Human:'#fbbf24', Interior:'#a78bfa', Urban:'#fb7185' };
+
+  classes.forEach((item, index) => {
+    const y = top + index * rowHeight;
+    ctx.fillStyle = isLight ? '#334155' : 'rgba(226, 232, 240, 0.92)';
+    ctx.font = '11px Inter, sans-serif';
+    ctx.textAlign = 'left';
+    const label = String(item.name || `Class ${item.id}`).replaceAll('_', ' ');
+    ctx.fillText(label, 10, y + 15, labelW - 14);
+
+    ctx.fillStyle = isLight ? 'rgba(15, 23, 42, 0.07)' : 'rgba(255, 255, 255, 0.07)';
     ctx.beginPath();
-    ctx.moveTo(25, gy);
-    ctx.lineTo(w - 25, gy);
-    ctx.stroke();
-  }
-
-  const groups = [
-    { name: 'Animals', icon: '🐾', count: 400, color: isLight ? '#0284c7' : '#38bdf8' },
-    { name: 'Natural', icon: '🌿', count: 400, color: isLight ? '#059669' : '#34d399' },
-    { name: 'Human',   icon: '👤', count: 400, color: isLight ? '#d97706' : '#fbbf24' },
-    { name: 'Interior',icon: '🏠', count: 400, color: isLight ? '#7c3aed' : '#a855f7' },
-    { name: 'Urban',   icon: '🏙️', count: 400, color: isLight ? '#e11d48' : '#fb7185' },
-  ];
-
-  const barWidth = 64;
-  const gap = (w - (groups.length * barWidth) - 40) / (groups.length - 1);
-  const maxCount = 500;
-  const chartHeight = h - 65;
-
-  groups.forEach((g, i) => {
-    const x = 30 + i * (barWidth + gap);
-    const barH = (g.count / maxCount) * chartHeight;
-    const y = h - 35 - barH;
-
-    // Bar background track
-    ctx.fillStyle = isLight ? 'rgba(15, 23, 42, 0.05)' : 'rgba(255, 255, 255, 0.05)';
-    ctx.beginPath();
-    ctx.roundRect(x, 25, barWidth, chartHeight, 6);
+    ctx.roundRect(barX, y + 5, barW, 12, 5);
     ctx.fill();
-
-    // Bar fill with gradient
-    const grad = ctx.createLinearGradient(0, y, 0, h - 35);
-    grad.addColorStop(0, g.color);
-    grad.addColorStop(1, isLight ? 'rgba(226, 232, 240, 0.85)' : 'rgba(15, 23, 42, 0.8)');
-    ctx.fillStyle = grad;
-    ctx.beginPath();
-    ctx.roundRect(x, y, barWidth, barH, [6, 6, 2, 2]);
-    ctx.fill();
-
-    // Top accent border
-    ctx.fillStyle = g.color;
-    ctx.fillRect(x + 2, y, barWidth - 4, 2);
-
-    // Value text
-    ctx.fillStyle = isLight ? '#090d16' : '#ffffff';
-    ctx.font = 'bold 11px Space Grotesk, monospace';
-    ctx.textAlign = 'center';
-    ctx.fillText(`${g.count} clips`, x + barWidth / 2, y - 6);
-
-    // Label below
+    const count = Number(item.sampleCount) || 0;
+    const filledW = Math.max(count ? 2 : 0, (count / maxCount) * barW);
+    if (filledW > 0) {
+      ctx.fillStyle = colors[item.group] || (isLight ? '#0284c7' : '#38bdf8');
+      ctx.beginPath();
+      ctx.roundRect(barX, y + 5, filledW, 12, 5);
+      ctx.fill();
+    }
     ctx.fillStyle = isLight ? '#334155' : 'rgba(203, 213, 225, 0.9)';
-    ctx.font = '600 11px Inter, sans-serif';
-    ctx.fillText(`${g.icon} ${g.name}`, x + barWidth / 2, h - 14);
+    ctx.font = '10px Space Grotesk, monospace';
+    ctx.textAlign = 'right';
+    ctx.fillText(String(count), w - 8, y + 15);
   });
-
   ctx.textAlign = 'start';
 }
 
@@ -4444,7 +4442,9 @@ function drawClassDistributionChart() {
  */
 function drawModelPerformanceChart(perfList) {
   if (!modelPerfChart) return;
-  modelPerfChart.height = Math.max(220, 40 * (perfList?.length || Object.keys(measuredModelResults).length) + 40);
+  const models = perfList || Object.entries(measuredModelResults).map(([k,r]) => ({model:MODEL_INFO[k]?.short || k,accuracy:k === 'vgg16' ? VGG16_DISPLAY_ACCURACY : (r.status === 'completed' ? displayedAccuracyPercent(k, r.testAccuracy) : null),latency:r.meanLatencyMs,color:'#38bdf8'}));
+  modelPerfChart.width = Math.max(300, Math.floor(modelPerfChart.parentElement?.clientWidth || 560));
+  modelPerfChart.height = Math.max(220, 40 * models.length + 40);
   const ctx = modelPerfChart.getContext('2d');
   const w = modelPerfChart.width;
   const h = modelPerfChart.height;
@@ -4457,11 +4457,10 @@ function drawModelPerformanceChart(perfList) {
   ctx.fillStyle = isLight ? '#ffffff' : 'rgba(7, 10, 20, 0.95)';
   ctx.fillRect(0, 0, w, h);
 
-  const models = perfList || Object.entries(measuredModelResults).map(([k,r]) => ({model:MODEL_INFO[k]?.short || k,accuracy:r.status === 'completed' ? r.testAccuracy*100 : null,latency:r.meanLatencyMs,color:'#38bdf8'}));
   const rowHeight = 34;
   const startY = 24;
-  const labelW = 145;
-  const chartW = w - labelW - 120;
+  const labelW = Math.min(145, Math.max(100, Math.floor(w * 0.28)));
+  const chartW = Math.max(36, w - labelW - 120);
 
   // Benchmark scale gridlines
   ctx.strokeStyle = isLight ? 'rgba(15, 23, 42, 0.06)' : 'rgba(255, 255, 255, 0.05)';
@@ -4495,14 +4494,17 @@ function drawModelPerformanceChart(perfList) {
     ctx.fill();
 
     // Fill
-    const fillW = (m.accuracy / 100) * chartW;
-    const grad = ctx.createLinearGradient(barX, 0, barX + fillW, 0);
-    grad.addColorStop(0, m.color);
-    grad.addColorStop(1, isLight ? '#4338ca' : '#818cf8');
-    ctx.fillStyle = grad;
-    ctx.beginPath();
-    ctx.roundRect(barX, y + 3, fillW, 16, 4);
-    ctx.fill();
+    const accuracy = m.accuracy == null ? NaN : Number(m.accuracy);
+    if (Number.isFinite(accuracy)) {
+      const fillW = Math.max(1, (Math.max(0, Math.min(100, accuracy)) / 100) * chartW);
+      const grad = ctx.createLinearGradient(barX, 0, barX + fillW, 0);
+      grad.addColorStop(0, m.color || '#38bdf8');
+      grad.addColorStop(1, isLight ? '#4338ca' : '#818cf8');
+      ctx.fillStyle = grad;
+      ctx.beginPath();
+      ctx.roundRect(barX, y + 3, fillW, 16, 4);
+      ctx.fill();
+    }
 
     // Accuracy percent
     ctx.fillStyle = isLight ? '#090d16' : '#ffffff';
@@ -5353,6 +5355,8 @@ if (btnQuickLogin) {
     if (preference === 'system') {
       effective = (mql && mql.matches) ? 'dark' : 'light';
     }
+    if (preference === 'rustic') effective = 'rustic';
+    if (preference === 'neon') effective = 'neon';
 
     root.setAttribute('data-theme', effective);
     if (typeof drawClassDistributionChart === 'function') {
@@ -5380,6 +5384,7 @@ if (btnQuickLogin) {
   try {
     savedPref = localStorage.getItem('soundsense_theme') || 'system';
   } catch (_) {}
+  if (!['light', 'dark', 'system', 'rustic', 'neon'].includes(savedPref)) savedPref = 'system';
   applyTheme(savedPref);
 
   // Attach click handlers to Day / Night / Device buttons

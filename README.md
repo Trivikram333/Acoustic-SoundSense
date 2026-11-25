@@ -66,6 +66,8 @@ python -m soundsense.ml.batch_preprocessor
 
 See [development](docs/development.md), [architecture](docs/architecture.md), and
 [model workflows](docs/model-workflows.md). Use module commands with `backend/src` on `PYTHONPATH`.
+For a newcomer-oriented map of the repository and links by task, see the
+[Project Guide](PROJECT_GUIDE.md).
 
 ## Verification and deployment
 
