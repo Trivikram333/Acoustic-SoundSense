@@ -58,6 +58,56 @@ class ApplicationTests(unittest.TestCase):
         self.assertEqual(result.json()['category']['name'],'dog')
         self.assertEqual(list(UPLOADS_DIR.iterdir()),[])
 
+    def test_huggingface_sync_downloads_all_weights_and_maps_resnet(self):
+        from soundsense.ml import huggingface_weights
+        checkpoint = ARTIFACTS_DIR / 'resnet_best_mmodel.pth'
+
+        def fake_snapshot_download(**kwargs):
+            checkpoint.parent.mkdir(parents=True, exist_ok=True)
+            checkpoint.write_bytes(b'resnet-checkpoint')
+            nested = ARTIFACTS_DIR / 'checkpoints' / 'sresnet_independent.pt'
+            nested.parent.mkdir(parents=True, exist_ok=True)
+            nested.write_bytes(b'sresnet-checkpoint')
+
+        with patch.object(huggingface_weights, '_SYNCED_REPO', None):
+            with patch.dict(os.environ, {
+                'SOUNDSENSE_HF_REPO_ID': 'owner/ESC-50_SRF',
+                'HF_TOKEN': 'test-token',
+            }):
+                with patch('huggingface_hub.snapshot_download', side_effect=fake_snapshot_download) as download:
+                    huggingface_weights.ensure_huggingface_weights()
+
+        self.assertTrue((ARTIFACTS_DIR / 'checkpoints' / 'resnet18_independent.pt').is_file())
+        self.assertTrue((ARTIFACTS_DIR / 'checkpoints' / 'sresnet_independent.pt').is_file())
+        kwargs = download.call_args.kwargs
+        self.assertEqual(kwargs['repo_id'], 'owner/ESC-50_SRF')
+        self.assertEqual(kwargs['repo_type'], 'model')
+        self.assertEqual(kwargs['token'], 'test-token')
+        self.assertIn('*.pt', kwargs['allow_patterns'])
+        self.assertEqual(kwargs['local_dir'], str(ARTIFACTS_DIR))
+
+    def test_huggingface_sync_maps_custom_files_and_rejects_traversal(self):
+        from soundsense.ml import huggingface_weights
+        def fake_snapshot_download(**kwargs):
+            (ARTIFACTS_DIR / 'weights').mkdir(parents=True, exist_ok=True)
+            (ARTIFACTS_DIR / 'weights' / 'uploaded_model.pth').write_bytes(b'model')
+
+        with patch.object(huggingface_weights, '_SYNCED_REPO', None):
+            with patch.dict(os.environ, {
+                'SOUNDSENSE_HF_REPO_ID': 'owner/ESC-50_SRF',
+                'SOUNDSENSE_HF_FILE_MAP': '{"weights/uploaded_model.pth":"checkpoints/vgg16_independent.pt"}',
+            }):
+                with patch('huggingface_hub.snapshot_download', side_effect=fake_snapshot_download):
+                    huggingface_weights.ensure_huggingface_weights()
+        self.assertTrue((ARTIFACTS_DIR / 'checkpoints' / 'vgg16_independent.pt').is_file())
+
+        with patch.dict(os.environ, {
+            'SOUNDSENSE_HF_REPO_ID': 'owner/ESC-50_SRF',
+            'SOUNDSENSE_HF_FILENAME': '../outside.pth',
+        }):
+            with self.assertRaises(ValueError):
+                huggingface_weights._safe_repo_path(os.environ['SOUNDSENSE_HF_FILENAME'])
+
     def test_developer_stats_route(self):
         from soundsense.api.auth import require_developer
         app.dependency_overrides[require_developer]=lambda: {'id':1,'role':'developer'}

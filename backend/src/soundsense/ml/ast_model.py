@@ -20,6 +20,7 @@ from torch.utils.data import DataLoader, Dataset
 from transformers import ASTFeatureExtractor, ASTForAudioClassification
 
 from . import config
+from .huggingface_weights import ensure_huggingface_weights
 
 BASE_MODEL = "MIT/ast-finetuned-audioset-10-10-0.4593"
 CHECKPOINT_DIR = ARTIFACTS_DIR / "checkpoints" / "ast_esc50_mic_calibrated"
@@ -54,6 +55,7 @@ def get_trained_ast():
     global _INFERENCE_CACHE
     if _INFERENCE_CACHE is not None:
         return _INFERENCE_CACHE
+    ensure_huggingface_weights()
     if not CHECKPOINT_DIR.is_dir():
         raise FileNotFoundError(
             f"Google AST has not been fine-tuned yet. Train it with the developer Training view; expected {CHECKPOINT_DIR}."

@@ -9,6 +9,7 @@ import time
 from pathlib import Path
 import torch
 import numpy as np
+from .huggingface_weights import ensure_huggingface_weights
 
 ROOT = ARTIFACTS_DIR
 BASE = ROOT / 'checkpoints/Cnn14_mAP_0.431.pth'
@@ -19,6 +20,7 @@ _head = None
 def backbone():
     global _backbone
     if _backbone is None:
+        ensure_huggingface_weights()
         # Import only the model module: upstream __init__ downloads labels into
         # the user's home folder, which ESC-50 transfer does not need.
         directory = importlib.metadata.distribution('panns-inference').locate_file('panns_inference')

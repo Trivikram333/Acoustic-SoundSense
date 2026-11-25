@@ -85,6 +85,46 @@ model inference. Add required model files and datasets separately before using
 inference.
 Use one application worker: training progress and counters are process-local.
 
+### Hugging Face model weights
+
+When a prediction is requested, the backend can fetch supported weight files from
+the configured Hugging Face model repository. Set `SOUNDSENSE_HF_REPO_ID` to the
+full `owner/repository` identifier. For a private repository, set `HF_TOKEN` as a
+secret environment variable in Render; never commit or share the token. The first
+download fetches supported weight/config files into `artifacts/`, preserving the
+repository's folder structure.
+
+The simplest layout is to upload files under the matching `artifacts/` paths used by
+the app, such as `checkpoints/resnet18_independent.pt`,
+`checkpoints/sresnet_independent.pt`, `weights/vgg16_best_model.pth`, and
+`checkpoints/ast_esc50_mic_calibrated/`. If names or folders differ, set
+`SOUNDSENSE_HF_FILE_MAP` to a JSON object mapping repository paths to the expected
+paths under `artifacts/`, for example
+`{"resnet_best_mmodel.pth":"checkpoints/resnet18_independent.pt"}`. The supplied
+`resnet_best_mmodel.pth` filename is also mapped to ResNet18 by default; override it
+with `SOUNDSENSE_HF_FILENAME` if needed. Each checkpoint still must match its
+architecture and expected state-dict format; one checkpoint cannot power every model
+option. On Render's free tier, files may need to be downloaded again after restarts.
+
+## Android app (Capacitor)
+
+Install Node.js LTS and Android Studio with its Android SDK. Set
+`window.SOUNDSENSE_API_BASE` in `frontend/js/api-config.js` to the HTTPS URL of the
+deployed backend before building; leave it empty only when the frontend and API are
+served from the same origin.
+
+From the repository root, run:
+
+```powershell
+npm install
+npm run android:sync
+npm run android:open
+```
+
+Build and run the Android app from Android Studio. The Android app bundles the
+frontend, but still needs an internet-accessible backend for API features. It
+requests microphone permission for audio recording.
+
 ## Before uploading to GitHub
 
 Only application source, documentation, configuration examples, and frontend assets
